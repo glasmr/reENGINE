@@ -1,24 +1,27 @@
 //! Generates a Vec<Token> of tokens from the supplied str.
 //! Tokens are later parsed by a separate module.
-//! ## The tokenizer currently supports ##
+//! # The tokenizer currently supports #
 //! Differential capturing and non-capturing groups,
 //! character escapes, octal escapes, hex escapes, Unicode escapes,
 //! start ^ and end $ anchors,
 //! elementary regex operators (*, +, ?, |),
 //! Character classes (\s, \S, \w, \W, \d, \D),
 //! back references.
-//! ## The tokenizer does NOT (yet) support ##
-//! Charter sets '[abc]',
+//! # The tokenizer does NOT (yet) support #
+//! ### Charter sets '[abc]' ###,
 //! Lookaround,
 //! word boundaries,
 //! Named capture groups,
-//! quantifiers '{1, 3}'
+//! ### quantifiers '{1, 3}' ###
 
-use crate::types::{CharClassType, GroupType, Token};
+use crate::types::token_types::{CharClassType, GroupType, Token};
+
 
 pub fn tokenize(input: &str) -> Vec<Token> {
     let mut tokens: Vec<Token> = Vec::new();
     let len = input.len();
+    let mut group: u8 = 0;
+    
     let mut i: usize = 0;
     while i < len {
         let ch = input.chars().nth(i).unwrap();
@@ -34,12 +37,13 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 if i + 2 < len {
                     if input.chars().nth(i + 1).unwrap() == '?' &&
                         input.chars().nth(i + 2).unwrap() == ':' {
-                        tokens.push(Token::LeftParen(GroupType::NonCapturing));
+                        tokens.push(Token::LeftParen(GroupType::NonCapturing, None));
                         i += 3;
                         continue;
                     }
                 }
-                tokens.push(Token::LeftParen(GroupType::Capturing))
+                group += 1;
+                tokens.push(Token::LeftParen(GroupType::Capturing, Some(group)));
             }
             ')' => {tokens.push(Token::RightParen)}
             '^' => {tokens.push(Token::StartAnchor)}
@@ -81,8 +85,9 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                         }
                         if next_char == '0' {tokens.push(Token::Literal('\0'))}
                         else {
-                            let b_ref = u8::from_str_radix(&next_char.to_string(), 10).unwrap();
-                            tokens.push(Token::BackReference(b_ref));
+                            /*let b_ref = u8::from_str_radix(&next_char.to_string(), 10).unwrap(); //Using NFA, no backref support
+                            tokens.push(Token::BackReference(b_ref));*/
+                            tokens.push(Token::Literal(next_char));
                         }
                     }
                     'x' => {
@@ -138,6 +143,7 @@ mod tests {
         let tokens = tokenize("abc");
         let expected: Vec<Token> = vec![Token::Literal('a'), Token::Literal('b'), Token::Literal('c')];
         assert_eq!(tokens, expected);
+
     }
     #[test]
     fn test_escaped_special_chars() {
@@ -150,11 +156,13 @@ mod tests {
     #[test]
     fn test_groups() {
         let tokens = tokenize("(abc)(?:abc)");
-        let expected: Vec<Token> = vec![Token::LeftParen(GroupType::Capturing), Token::Literal('a'), Token::Literal('b'),
-                                        Token::Literal('c'), Token::RightParen, Token::LeftParen(GroupType::NonCapturing),
+        let expected: Vec<Token> = vec![Token::LeftParen(GroupType::Capturing, Some(1)), Token::Literal('a'), Token::Literal('b'),
+                                        Token::Literal('c'), Token::RightParen, Token::LeftParen(GroupType::NonCapturing, None),
                                         Token::Literal('a'), Token::Literal('b'), Token::Literal('c'), Token::RightParen];
         assert_eq!(tokens, expected);
     }
+    #[test]
+    fn test_general_escapes() {}
     #[test]
     fn test_octal_escapes() {
         let tokens = tokenize("\\012");
@@ -170,10 +178,14 @@ mod tests {
         let expected: Vec<Token> = vec![Token::Literal('a'), Token::Literal(255 as char), Token::Literal('a')];
         assert_eq!(tokens, expected);
         let tokens = tokenize("\\900");
-        let expected: Vec<Token> = vec![Token::BackReference(9), Token::Literal('0'), Token::Literal('0')];
+        let expected: Vec<Token> = vec![Token::Literal('9'), Token::Literal('0'), Token::Literal('0')];
         assert_eq!(tokens, expected);
         let tokens = tokenize("\\080");
         let expected: Vec<Token> = vec![Token::Literal('\0'), Token::Literal('8'), Token::Literal('0')];
         assert_eq!(tokens, expected);
     }
+    #[test]
+    fn test_hex_escapes() {}
+    #[test]
+    fn test_unicode_escapes() {}
 }
