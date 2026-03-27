@@ -1,7 +1,8 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
+    Epsilon,
     Literal(char),
-    Any,
+    WildCard,
 
     ZeroOrMore, // *
     OneOrMore, // +
@@ -16,10 +17,8 @@ pub enum Token {
     EndAnchor, // $
 
     //BackReference(u8), // \(1-9)
-
-    StartCharSet(CharSetType),
-    EndCharSet,
-    CharacterClass(CharClassType)
+    CharacterClass(CharClassType),
+    CharacterSet(CharSetType, Vec<CharClassType>)
 
 }
 
@@ -29,7 +28,7 @@ pub enum GroupType {
     NonCapturing,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 pub enum CharSetType {
     NonNegated,
     Negated
@@ -37,10 +36,13 @@ pub enum CharSetType {
 
 #[derive(Debug, Clone, PartialEq, Copy)]
 pub enum CharClassType {
-    Word,
-    NonWord,
-    Digit,
-    NonDigit,
-    Whitespace,
-    NonWhitespace,
+    Word, //w
+    NonWord, //W
+    Digit, //d
+    NonDigit, //D
+    Whitespace, //s
+    NonWhitespace, //S
+    Literal(char),
+    Range(char, char),
+    Any // match anything 
 }
