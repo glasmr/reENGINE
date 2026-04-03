@@ -4,8 +4,8 @@ This parser will use recursive decent
 
 
 We will define a BNF grammar, with which the parser will follow
-        <regex>       ::=   regex '|' top
-                      |     regex
+        <regex>       ::=   anchor '|' regex
+                      |     anchor
 
         <anchor>     ::=    '^' term
                       |     term '$'
@@ -22,13 +22,15 @@ We will define a BNF grammar, with which the parser will follow
 
         <primary>   ::=     <literal> **bracket expressions are dealt with by lexer, and treated like a literal
                       |     <any>
+                      |     <word-boundary>
                       |     '(' <regex> ')'
 
         <literal>   ::=     "any 'Literal' token"
         <any>       ::=     "any 'Any' token"
+        <word-boundary> ::= '\b' | '\B'
 
  */
-use crate::types::token_types::{GroupType, Token};
+use crate::types::token_types::{Token};
 use crate::types::ast_types::{NodeAST, QuantifierType};
 
 use std::iter::Peekable;
@@ -39,14 +41,14 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(tokens:Vec<Token>) -> Parser {
+    pub fn new(tokens: Vec<Token>) -> Parser {
         Parser {
             tokens: tokens.into_iter().peekable(),
         }
     }
 
     pub fn parse_regex(&mut self) -> Result<Box<NodeAST>, String> {
-        let node = self.parse_anchor()?;
+        let node = self.parse_start_anchor()?;
         let next_token = self.tokens.peek();
         match next_token {
             Some(token) => match token {
@@ -61,15 +63,16 @@ impl Parser {
         }
     }
 
-    fn parse_anchor(&mut self) -> Result<Box<NodeAST>, String> {
+    fn parse_start_anchor(&mut self) -> Result<Box<NodeAST>, String> {
         let current_token = self.tokens.peek();
         if *current_token.ok_or(String::from("Error: Unexpected EOF"))? == Token::StartAnchor {
             self.tokens.next();
-            let node = self.parse_term()?;
+            let node = self.parse_end_anchor()?;
             return Ok(Box::new(NodeAST::AnchorStart(node)));
         }
-        let node = self.parse_term()?;
-        let next_token = self.tokens.peek();
+        let node = self.parse_end_anchor()?;
+        Ok(node)
+        /*let next_token = self.tokens.peek();
         match next_token {
             Some(token) => {
                 match token {
@@ -81,7 +84,19 @@ impl Parser {
                 }
             }
             None => { Ok(node) }
+        }*/
+    }
+
+    fn parse_end_anchor(&mut self) -> Result<Box<NodeAST>, String> {
+        let node = self.parse_term()?;
+        let next_token = self.tokens.peek();
+        if !next_token.is_none() {
+            if let Token::EndAnchor = next_token.unwrap() {
+                self.tokens.next();
+                return Ok(Box::new(NodeAST::AnchorEnd(node)));
+            }
         }
+        Ok(node)
     }
 
     fn parse_term(&mut self) -> Result<Box<NodeAST>, String> {
@@ -90,7 +105,9 @@ impl Parser {
 
         match next_token {
             Some(token) => match token {
-                Token::Literal(_) | Token::WildCard | Token::LeftParen(_, _) => {
+                Token::Literal(_) | Token::WildCard | Token::LeftParen
+                | Token::CharacterSet(_, _) | Token::CharacterClass(_)
+                | Token::WordBoundary | Token::NonWordBoundary => {
                     let next_node = self.parse_term()?;
                     Ok(Box::new(NodeAST::Concatenation(node, next_node)))
                 }
@@ -152,31 +169,17 @@ impl Parser {
             Token::CharacterClass(value) => Ok(Box::new(NodeAST::CharacterClass(value))),
             Token::CharacterSet(negated, character_sets) => {Ok(Box::new(NodeAST::CharacterSet(negated, character_sets)))}
             Token::WildCard => Ok(Box::new(NodeAST::Any)),
-            Token::LeftParen(group_type, group) => {
-                match group_type {
-                    GroupType::NonCapturing => {
-                        let node = self.parse_regex()?;
+            Token::WordBoundary => {Ok(Box::new(NodeAST::WordBoundary))}
+            Token::NonWordBoundary => {Ok(Box::new(NodeAST::NonWordBoundary))}
+            Token::LeftParen => {
+                let node = self.parse_regex()?;
 
-                        match self.tokens.next() {
-                            Some(Token::RightParen) => {
-                                Ok(Box::new(NodeAST::NonCapturingGroup(node)))
-                            }
-                            Some(unexpected_token) => Err(format!("Unexpected token {:?}, expected )", unexpected_token)),
-                            None => Err(String::from("Unexpected EOF")),
-                        }
+                match self.tokens.next() {
+                    Some(Token::RightParen) => {
+                        Ok(Box::new(NodeAST::Group(node)))
                     }
-                    GroupType::Capturing => {
-                        //self.group += 1;
-                        let node = self.parse_regex()?;
-                        match self.tokens.next() {
-
-                            Some(Token::RightParen) => {
-                                Ok(Box::new(NodeAST::CaptureGroup(node, group.unwrap())))
-                            }
-                            Some(unexpected_token) => Err(format!("Unexpected token {:?}, expected )", unexpected_token)),
-                            None => Err(String::from("Unexpected EOF")),
-                        }
-                    }
+                    Some(unexpected_token) => Err(format!("Unexpected token {:?}, expected )", unexpected_token)),
+                    None => Err(String::from("Unexpected EOF")),
                 }
             }
             _ => {
@@ -281,16 +284,15 @@ mod tests {
 
         input = "(a|b)|c";
         ast = Parser::new(tokenize(input).unwrap()).parse_regex();
-        expected_ast = Box::new(NodeAST::Alternation(Box::new(NodeAST::CaptureGroup(
-            Box::new(NodeAST::Alternation(Box::new(NodeAST::Literal('a')), Box::new(NodeAST::Literal('b')))),
-            1
+        expected_ast = Box::new(NodeAST::Alternation(Box::new(NodeAST::Group(
+            Box::new(NodeAST::Alternation(Box::new(NodeAST::Literal('a')), Box::new(NodeAST::Literal('b'))))
         )), Box::new(NodeAST::Literal('c'))));
         assert_eq!(ast.unwrap(), expected_ast);
 
         input = "a|(b|c)";
         ast = Parser::new(tokenize(input).unwrap()).parse_regex();
-        expected_ast = Box::new(NodeAST::Alternation(Box::new(NodeAST::Literal('a')), Box::new(NodeAST::CaptureGroup(
-            Box::new(NodeAST::Alternation(Box::new(NodeAST::Literal('b')), Box::new(NodeAST::Literal('c')))), 1
+        expected_ast = Box::new(NodeAST::Alternation(Box::new(NodeAST::Literal('a')), Box::new(NodeAST::Group(
+            Box::new(NodeAST::Alternation(Box::new(NodeAST::Literal('b')), Box::new(NodeAST::Literal('c'))))
         ))));
         assert_eq!(ast.unwrap(), expected_ast);
     }
@@ -409,11 +411,11 @@ mod tests {
         let mut expected_ast = Box::new(NodeAST::Concatenation(
             Box::new(NodeAST::Literal('a')),
             Box::new(NodeAST::Concatenation(
-                Box::new(NodeAST::CaptureGroup(
+                Box::new(NodeAST::Group(
                     Box::new(NodeAST::Concatenation(
                         Box::new(NodeAST::Literal('b')),
                         Box::new(NodeAST::Literal('c'))
-                    )), 1)),
+                    )))),
                 Box::new(NodeAST::Literal('d'))
             ))
         ));
@@ -422,19 +424,17 @@ mod tests {
         input = "(ab)(cd)";
         ast = Parser::new(tokenize(input).unwrap()).parse_regex();
         expected_ast = Box::new(NodeAST::Concatenation(
-            Box::new(NodeAST::CaptureGroup(
+            Box::new(NodeAST::Group(
                 Box::new(NodeAST::Concatenation(
                     Box::new(NodeAST::Literal('a')),
                     Box::new(NodeAST::Literal('b'))
-                )),
-                1
+                ))
             )),
-            Box::new(NodeAST::CaptureGroup(
+            Box::new(NodeAST::Group(
                 Box::new(NodeAST::Concatenation(
                     Box::new(NodeAST::Literal('c')),
                     Box::new(NodeAST::Literal('d'))
-                )),
-                2
+                ))
             ))
         ));
         debug_assert_eq!(ast.unwrap(), expected_ast);
@@ -444,12 +444,11 @@ mod tests {
         expected_ast = Box::new(NodeAST::Concatenation(
             Box::new(NodeAST::Literal('a')),
             Box::new(NodeAST::Concatenation(
-                Box::new(NodeAST::CaptureGroup(
+                Box::new(NodeAST::Group(
                     Box::new(NodeAST::Alternation(
                         Box::new(NodeAST::Literal('b')),
                         Box::new(NodeAST::Literal('c'))
-                    )),
-                    1
+                    ))
                 )),
                 Box::new(NodeAST::Literal('d'))
             ))
@@ -515,12 +514,11 @@ mod tests {
         let mut input = "(ab)?";
         let mut ast = Parser::new(tokenize(input).unwrap()).parse_regex();
         let mut expected_ast = Box::new(NodeAST::Quantifier(
-            Box::new(NodeAST::CaptureGroup(
+            Box::new(NodeAST::Group(
                 Box::new(NodeAST::Concatenation(
                     Box::new(NodeAST::Literal('a')),
                     Box::new(NodeAST::Literal('b'))
-                )),
-                1
+                ))
             )),
             QuantifierType::ZeroOrOne
         ));
@@ -529,12 +527,11 @@ mod tests {
         input = "(a|b)+";
         ast = Parser::new(tokenize(input).unwrap()).parse_regex();
         expected_ast = Box::new(NodeAST::Quantifier(
-            Box::new(NodeAST::CaptureGroup(
+            Box::new(NodeAST::Group(
                 Box::new(NodeAST::Alternation(
                     Box::new(NodeAST::Literal('a')),
                     Box::new(NodeAST::Literal('b'))
-                )),
-                1
+                ))
             )),
             QuantifierType::OneOrMore
         ));
@@ -543,15 +540,14 @@ mod tests {
         input = "(abc)*";
         ast = Parser::new(tokenize(input).unwrap()).parse_regex();
         expected_ast = Box::new(NodeAST::Quantifier(
-            Box::new(NodeAST::CaptureGroup(
+            Box::new(NodeAST::Group(
                 Box::new(NodeAST::Concatenation(
                     Box::new(NodeAST::Literal('a')),
                     Box::new(NodeAST::Concatenation(
                         Box::new(NodeAST::Literal('b')),
                         Box::new(NodeAST::Literal('c'))
                     ))
-                )),
-                1
+                ))
             )),
             QuantifierType::ZeroOrMore
         ));
@@ -561,22 +557,20 @@ mod tests {
         ast = Parser::new(tokenize(input).unwrap()).parse_regex();
         expected_ast = Box::new(NodeAST::Concatenation(
             Box::new(NodeAST::Quantifier(
-                Box::new(NodeAST::CaptureGroup(
+                Box::new(NodeAST::Group(
                     Box::new(NodeAST::Concatenation(
                         Box::new(NodeAST::Literal('a')),
                         Box::new(NodeAST::Literal('b'))
-                    )),
-                    1
+                    ))
                 )),
                 QuantifierType::OneOrMore
             )),
             Box::new(NodeAST::Quantifier(
-                Box::new(NodeAST::CaptureGroup(
+                Box::new(NodeAST::Group(
                     Box::new(NodeAST::Concatenation(
                         Box::new(NodeAST::Literal('c')),
                         Box::new(NodeAST::Literal('d'))
-                    )),
-                    2
+                    ))
                 )),
                 QuantifierType::ZeroOrOne
             ))
