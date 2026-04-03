@@ -9,141 +9,99 @@ pub struct NFA {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct State {
-    state_type: StateType,
-    transitions: Option<(Transition, Option<Transition>)>,
+pub enum State {
+    Single(Transition),
+    Split(Transition, Transition),
+    Match,
 }
+
 impl State {
-    pub fn new(state_type: StateType, transitions: Option<(Transition, Option<Transition>)>) -> State {
-        State {
-            state_type,
-            transitions
+    #[allow(dead_code)]
+    pub fn state_type(&self) -> &str {
+        match self {
+            State::Single(_) => {"literal"},
+            State::Split(_, _) => {"split"},
+            State::Match => {"match"},
         }
-    }
-    pub fn transition(&mut self, transitions: Option<(Transition, Option<Transition>)>) {
-        self.transitions = transitions;
     }
 
-    pub fn change_state_type(&mut self, state_type: StateType) {
-        self.state_type = state_type
+    #[allow(dead_code)]
+    pub fn transition_next(&self) -> Option<(usize, Option<usize>)> {
+        if let State::Single(n) = self {
+            let next = n.next_state().unwrap();
+            return Some((next, None))
+        }
+        if let State::Split(first, second) = self {
+            let first_next = first.next_state().unwrap();
+            let second_next = second.next_state().unwrap();
+            return Some((first_next, Some(second_next)))
+        }
+        None
     }
 
-    pub fn connect_first_transition(&mut self, state_idx: usize) -> Result<(), String> {
-        match self.transitions.clone() {
-            Some((first, second)) => {
-                match first {
-                    Transition::Epsilon(_, _) => {
-                        self.transitions = Some((Transition::Epsilon(Some(state_idx), None), second));
-                    }
-                    Transition::Literal(char, _) => {
-                        self.transitions = Some((Transition::Literal(char, Some(state_idx)), second));
-                    }
-                    Transition::AnchorStart(_) => {
-                        self.transitions = Some((Transition::AnchorStart(Some(state_idx)), second));
-                    }
-                    Transition::AnchorEnd(_) => {
-                        self.transitions = Some((Transition::AnchorEnd(Some(state_idx)), second));
-                    }
-                    Transition::CaptureGroupStart(group, _) => {
-                        self.transitions = Some((Transition::CaptureGroupStart(group, Some(state_idx)), second));
-                    }
-                    Transition::CaptureGroupEnd(group, _) => {
-                        self.transitions = Some((Transition::CaptureGroupEnd(group, Some(state_idx)), second));
-                    }
-                    Transition::NonCapturingGroupStart(_) => {
-                        self.transitions = Some((Transition::NonCapturingGroupStart(Some(state_idx)), second));
-                    }
-                    Transition::NonCapturingGroupEnd(_) => {
-                        self.transitions = Some((Transition::NonCapturingGroupEnd(Some(state_idx)), second));
-                    }
-                }
-            }
-            None => {return Err(String::from("No transitions given"))}
+    #[allow(dead_code)]
+    pub fn update_first_transition_next(&mut self, next_state: usize) {
+        if let State::Single(next) = self {
+            next.update_next_state(next_state)
         }
-        Ok(())
-    }
-    pub fn connect_second_transition(&mut self, state_idx: usize) -> Result<(), String> {
-        match self.transitions.clone() {
-            Some((first, second)) => {
-                match second {
-                    Some(Transition::Epsilon(_, _)) => {
-                        self.transitions = Some((first, Some(Transition::Epsilon(Some(state_idx), None))));
-                    }
-                    Some(Transition::Literal(char, _)) => {
-                        self.transitions = Some((first, Some(Transition::Literal(char, Some(state_idx)))));
-                    }
-                    Some(Transition::AnchorStart(_)) => {
-                        self.transitions = Some((first, Some(Transition::AnchorStart(Some(state_idx)))));
-                    }
-                    Some(Transition::AnchorEnd(_)) => {
-                        self.transitions = Some((first, Some(Transition::AnchorEnd(Some(state_idx)))));
-                    }
-                    Some(Transition::CaptureGroupStart(group, _)) => {
-                        self.transitions = Some((first, Some(Transition::CaptureGroupStart(group, Some(state_idx)))));
-                    }
-                    Some(Transition::CaptureGroupEnd(group, _)) => {
-                        self.transitions = Some((first, Some(Transition::CaptureGroupEnd(group, Some(state_idx)))));
-                    }
-                    Some(Transition::NonCapturingGroupStart(_)) => {
-                        self.transitions = Some((first, Some(Transition::NonCapturingGroupStart(Some(state_idx)))));
-                    }
-                    Some(Transition::NonCapturingGroupEnd(_)) => {
-                        self.transitions = Some((first, Some(Transition::NonCapturingGroupEnd(Some(state_idx)))));
-                    }
-                    None => {
-                        //We will assume if it is None, then it was a literal changed
-                        //to a split state, in that case we will assume an Epsilon Transition
-                        //return Err(String::from("No transitions set in position 2!"))
-                        self.transitions.as_mut().unwrap().1 = Some(Transition::Epsilon(Some(state_idx), None))
-                    }
-                }
-            }
-            None => {return Err(String::from("No transitions given"))}
+        if let State::Split(first, _) = self {
+            first.update_next_state(next_state)
         }
-        Ok(())
-    }
-    pub fn get_state_type(&self) -> StateType {
-        self.state_type.clone()
-    }
-    pub fn get_transitions(&self) -> Option<(Transition, Option<Transition>)> {
-        self.transitions.clone()
     }
 
-    pub fn get_first_transition(&self) -> Option<Transition> {
-        match self.transitions.clone() {
-            Some((first, _)) => {
-                Some(first)
-            }
-            None => {None}
-        }
-    }
-    pub fn get_second_transition(&self) -> Option<Transition> {
-        match self.transitions.clone() {
-            Some((_, second)) => {
-                second
-            }
-            None => {None}
+    #[allow(dead_code)]
+    pub fn update_second_transition_next(&mut self, next_state: usize) {
+        if let State::Split(_, second) = self {
+            second.update_next_state(next_state)
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Transition {
-    Epsilon(Option<usize>, Option<u8>), //Second u8 is to mark a (){0} group number
-    Literal(CharToMatch, Option<usize>),
-    AnchorStart(Option<usize>),
-    AnchorEnd(Option<usize>),
-    CaptureGroupStart(u8, Option<usize>),
-    CaptureGroupEnd(u8, Option<usize>),
-    NonCapturingGroupStart(Option<usize>),
-    NonCapturingGroupEnd(Option<usize>),
+    Literal(usize, CharToMatch),
+    Epsilon(usize, EpsilonCondition),
+    DanglingTransition,
+}
+
+impl Transition {
+    pub fn next_state(&self) -> Option<usize> {
+        if let Transition::Literal(n, _) = self {return Some(*n)}
+        if let Transition::Epsilon(n, _) = self {return Some(*n)}
+        None
+    }
+
+    #[allow(dead_code)]
+    pub fn next_char(&self) -> Option<CharToMatch> {
+        if let Transition::Literal(_, char) = self {return Some(char.clone())}
+        None
+    }
+
+    #[allow(dead_code)]
+    pub fn next_condition(&self) -> Option<EpsilonCondition> {
+        if let Transition::Epsilon(_, condition) = self {
+            return Some(condition.clone())
+        }
+        None
+    }
+
+    pub fn update_next_state(&mut self, next_state: usize) {
+        if let Transition::Literal(n, _) = self {
+            *n = next_state
+        }
+        if let Transition::Epsilon(n, _) = self {
+            *n = next_state
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum StateType {
-    Literal,
-    Split,
-    Match,
+pub enum EpsilonCondition {
+    Unconditional,
+    StartAnchor,
+    EndAnchor,
+    WordBoundary,
+    NonWordBoundary,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -152,5 +110,4 @@ pub enum CharToMatch {
     CharacterClass(CharClassType),
     CharacterSet(CharSetType, Vec<CharClassType>),
     Any
-    //...
 }
