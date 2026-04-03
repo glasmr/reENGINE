@@ -10,22 +10,18 @@ pub enum Token {
     Repetition(usize, Option<usize>), // {n, m}
 
     Alternation, // |
-    LeftParen(GroupType, Option<u8>), // (
+    LeftParen, // (
     RightParen, // )
 
     StartAnchor, // ^
     EndAnchor, // $
 
-    //BackReference(u8), // \(1-9)
+    WordBoundary, // '\b'
+    NonWordBoundary, // '\B'
+
     CharacterClass(CharClassType),
     CharacterSet(CharSetType, Vec<CharClassType>)
 
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum GroupType {
-    Capturing,
-    NonCapturing,
 }
 
 #[derive(Debug, Clone, PartialEq, Copy)]
