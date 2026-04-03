@@ -1,168 +1,142 @@
+use std::cmp::PartialEq;
 use std::collections::HashSet;
-use crate::types::nfa_types::{StateType, Transition, NFA};
+use crate::types::nfa_types::{EpsilonCondition, State, Transition, NFA};
 use crate::matcher::matcher;
 
-pub struct Simulator{
+pub struct Simulator {
     nfa: NFA,
+    input_str_vec: Vec<char>,
+    str_pos: usize
 }
+#[derive(Debug, PartialEq)]
+pub enum SearchType {Substring, Fullstring}
 
 impl Simulator {
     pub fn new(nfa: NFA) -> Self {
         Simulator{
-            nfa
+            nfa,
+            input_str_vec: Vec::new(),
+            str_pos: 0
         }
     }
 
-    pub fn simulate(&mut self, input: String) -> Option<(String, Vec<usize>)> {
-        let mut matches: (String, Vec<usize>) = (input.clone(), Vec::new());
-        let mut state_set: HashSet<usize> = HashSet::new();
-        state_set.insert(self.nfa.start_state);
+
+    pub fn simulate(&mut self, input: String, search_type: SearchType) -> bool {
+        //dbg!(&self.nfa.states);
+        self.input_str_vec = input.chars().collect();
+        let start_state = self.nfa.start_state;
+        let start_set: HashSet<usize> = self.epsilon_closure(&HashSet::from([start_state]));
+        let mut state_set: HashSet<usize> = start_set.clone();
+        //dbg!(&state_set);
+        while self.str_pos < self.input_str_vec.len() {
+            let current_char: char = self.input_str_vec[self.str_pos];
+            if state_set.is_empty() {return false}
+            state_set = self.move_next_state(&state_set, current_char);
+            //println!("Moving state: {}", current_char);
+            state_set = self.epsilon_closure(&state_set);
+            self.str_pos += 1;
+            if search_type == SearchType::Substring {
+                state_set.extend(&self.epsilon_closure(&HashSet::from([start_state])));
+                for state in &state_set {
+                    if let State::Match = self.nfa.states[*state] {
+                        return true;
+                    }
+                }
+            }
+            //dbg!(&state_set);
+        }
+        for state in &state_set {
+            if let State::Match = self.nfa.states[*state] {
+                return true;
+            }
+        }
+        false
+    }
+    fn move_next_state(&mut self, state_set: &HashSet<usize>, c: char) -> HashSet<usize> {
         let mut next_state_set: HashSet<usize> = HashSet::new();
 
-        let input_str_vec = input.chars().collect::<Vec<char>>();
-
-        let mut i: usize = 0;
-        let mut simulate = true;
-        while simulate {
-            if i == input_str_vec.len() {simulate = false;}
-            let current_c = if i < input_str_vec.len() {input_str_vec[i]} else {input_str_vec[i - 1]};
-            println!("current_c = {}", current_c);
-            for state_idx in state_set.iter() {
-                let state = self.nfa.states[*state_idx].clone();
-                match state.get_state_type().clone() {
-                    StateType::Literal | StateType::Split => {
-                        match state.get_first_transition() {
-                            Some(first_transition) => {
-                                match first_transition {
-                                    Transition::Literal(char_to_match, next) => {
-                                        if matcher(current_c, char_to_match) {
-                                            next_state_set.insert(next?);
-                                            matches.1.push(i);
-                                            i += 1;
-                                        }
-                                    }
-                                    Transition::Epsilon(next, _)
-                                    | Transition::CaptureGroupStart(_, next)
-                                    | Transition::CaptureGroupEnd(_, next)
-                                    | Transition::NonCapturingGroupStart(next)
-                                    | Transition::NonCapturingGroupEnd(next)
-                                    | Transition::AnchorStart(next)
-                                    | Transition::AnchorEnd(next) => {
-                                        self.calculate_epsilon_closure(&mut next_state_set, *state_idx);
-                                        if state.get_state_type().clone() == StateType::Literal {continue;};
-                                    }
-                                }
-                            }
-                            None => {}
-                        }
-                        match state.get_second_transition() {
-                            Some(second_transition) => {
-                                match second_transition {
-                                    Transition::Literal(char_to_match, next) => {
-                                        if matcher(current_c, char_to_match) {
-                                            next_state_set.insert(next?);
-                                            matches.1.push(i);
-                                            i += 1;
-                                        }
-                                    }
-                                    Transition::Epsilon(next, _)
-                                    | Transition::CaptureGroupStart(_, next)
-                                    | Transition::CaptureGroupEnd(_, next)
-                                    | Transition::NonCapturingGroupStart(next)
-                                    | Transition::NonCapturingGroupEnd(next)
-                                    | Transition::AnchorStart(next)
-                                    | Transition::AnchorEnd(next) => {
-                                        self.calculate_epsilon_closure(&mut next_state_set, *state_idx);
-                                        continue
-                                    }
-                                }
-                            }
-                            None => {continue}
+        for state in state_set {
+            match self.nfa.states[*state].clone() {
+                State::Single(transition) => {
+                    if let Transition::Literal(next, to_match) = transition {
+                        if matcher(c, &to_match) {
+                            next_state_set.insert(next);
                         }
                     }
-                    StateType::Match => {return Some(matches)}
                 }
+                _ => {}
             }
-            dbg!(&next_state_set);
-            if next_state_set.is_empty() {return None}
-            state_set = next_state_set.clone();
-            dbg!(&state_set);
-            next_state_set.clear();
         }
-        None
+        //dbg!(&next_state_set);
+        next_state_set
+    }
+    fn epsilon_closure(&mut self, states: &HashSet<usize>) -> HashSet<usize> {
+        let mut stack: Vec<usize> = Vec::from(states.clone().into_iter().collect::<Vec<usize>>());
+        let mut visited: HashSet<usize> = HashSet::from(states.clone());
+        let mut next_state_set: HashSet<usize> = HashSet::from(states.clone());
+
+        while !stack.is_empty() {
+            let current_state = stack.pop().unwrap();
+            match self.nfa.states[current_state].clone() {
+                State::Single(Transition::Epsilon(next, condition)) => {
+                    if !visited.contains(&next){
+                        if self.epsilon_condition(&condition) {
+                            stack.push(next);
+                            next_state_set.insert(next);
+                            visited.insert(next);
+                        }
+                    }
+                }
+                State::Split(transition_1, transition_2) => {
+                    if let Transition::Epsilon(next, condition) = transition_1 {
+                        if !visited.contains(&next){
+                            if self.epsilon_condition(&condition) {
+                                stack.push(next);
+                                next_state_set.insert(next);
+                                visited.insert(next);
+                            }
+                        }
+                    }
+                    if let Transition::Epsilon(next, condition) = transition_2 {
+                        if !visited.contains(&next){
+                            if self.epsilon_condition(&condition) {
+                                stack.push(next);
+                                next_state_set.insert(next);
+                                visited.insert(next);
+                            }
+                        }
+                    }
+                }
+                State::Match => {next_state_set.insert(current_state);}
+                _ => {}
+            }
+        }
+        next_state_set
     }
 
-    fn calculate_epsilon_closure(&mut self, next_set: &mut HashSet<usize>, state_idx: usize) {
-        let state = self.nfa.states[state_idx].clone();
-        dbg!(&state);
-        match state.get_state_type() {
-            StateType::Literal => {
-                match state.get_first_transition() {
-                    Some(first_transition) => {
-                        match first_transition {
-                            Transition::Literal(_, _) => {return}
-                            Transition::Epsilon(next, _)
-                            | Transition::CaptureGroupStart(_, next)
-                            | Transition::CaptureGroupEnd(_, next)
-                            | Transition::NonCapturingGroupStart(next)
-                            | Transition::NonCapturingGroupEnd(next)
-                            | Transition::AnchorStart(next)
-                            | Transition::AnchorEnd(next) => {
-                                dbg!(&next);
-                                if next.is_none() {return}
-                                if next_set.contains(&next.unwrap()) {return}
-                                next_set.insert(next.unwrap());
-                                self.calculate_epsilon_closure(next_set, next.unwrap());
-                            }
-                        }
-                    }
-                    None => {return}
-                }
-            }
-            StateType::Split => {
-                match state.get_first_transition() {
-                    Some(first_transition) => {
-                        match first_transition {
-                            Transition::Literal(_, _) => { return }
-                            Transition::Epsilon(next, _)
-                            | Transition::CaptureGroupStart(_, next)
-                            | Transition::CaptureGroupEnd(_, next)
-                            | Transition::NonCapturingGroupStart(next)
-                            | Transition::NonCapturingGroupEnd(next)
-                            | Transition::AnchorStart(next)
-                            | Transition::AnchorEnd(next) => {
-                                if next.is_none() { return }
-                                if next_set.contains(&next.unwrap()) { return }
-                                next_set.insert(next.unwrap());
-                                self.calculate_epsilon_closure(next_set, next.unwrap());
-                            }
-                        }
-                    }
-                    None => {}
-                }
-                match state.get_second_transition() {
-                    Some(second_transition) => {
-                        match second_transition {
-                            Transition::Literal(_, _) => { return }
-                            Transition::Epsilon(next, _)
-                            | Transition::CaptureGroupStart(_, next)
-                            | Transition::CaptureGroupEnd(_, next)
-                            | Transition::NonCapturingGroupStart(next)
-                            | Transition::NonCapturingGroupEnd(next)
-                            | Transition::AnchorStart(next)
-                            | Transition::AnchorEnd(next) => {
-                                if next.is_none() { return }
-                                if next_set.contains(&next.unwrap()) { return }
-                                next_set.insert(next.unwrap());
-                                self.calculate_epsilon_closure(next_set, next.unwrap());
-                            }
-                        }
-                    }
-                    None => {return}
-                }
-            }
-            StateType::Match => {next_set.insert(state_idx); return}
+    fn epsilon_condition(&self, condition: &EpsilonCondition) -> bool {
+        match condition {
+            EpsilonCondition::Unconditional => true,
+            EpsilonCondition::StartAnchor => {self.str_pos == 0}
+            EpsilonCondition::EndAnchor => {self.str_pos == self.input_str_vec.len() - 1}
+            EpsilonCondition::WordBoundary => {self.is_word_boundary(&self.str_pos, &self.input_str_vec)}
+            EpsilonCondition::NonWordBoundary => {!self.is_word_boundary(&self.str_pos, &self.input_str_vec)}
         }
     }
-
+    fn is_word(&self, c: char) -> bool {
+        c.is_ascii_alphabetic() || c == '_'
+    }
+    fn is_word_boundary(&self, str_pos: &usize, input: &Vec<char>) -> bool {
+        let left = if *str_pos == 0 {
+            false
+        } else {
+            self.is_word(input[*str_pos - 1])
+        };
+        let right = if *str_pos >= input.len() - 1 {
+            false
+        } else {
+            self.is_word(input[*str_pos + 1])
+        };
+        left != right
+    }
 }
