@@ -18,14 +18,13 @@
 
 use std::collections::HashSet;
 use std::str::FromStr;
-use crate::types::token_types::{CharClassType, GroupType, Token, CharSetType};
+use crate::types::token_types::{CharClassType, Token, CharSetType};
 
 
 pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
     let mut tokens: Vec<Token> = Vec::new();
     let len = input.len();
     if len == 0 {tokens.push(Token::Epsilon); return Ok(tokens);}
-    let mut group: u8 = 0;
     
     let mut i: usize = 0;
     while i < len {
@@ -41,18 +40,7 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
             '+' => {tokens.push(Token::OneOrMore)}
             '?' => {tokens.push(Token::ZeroOrOne)}
             '|' => {tokens.push(Token::Alternation)}
-            '(' => { //check if group is capturing or not
-                if i + 2 < len {
-                    if input.chars().nth(i + 1).unwrap() == '?' &&
-                        input.chars().nth(i + 2).unwrap() == ':' {
-                        tokens.push(Token::LeftParen(GroupType::NonCapturing, None));
-                        i += 3;
-                        continue;
-                    }
-                }
-                group += 1;
-                tokens.push(Token::LeftParen(GroupType::Capturing, Some(group)));
-            }
+            '(' => {tokens.push(Token::LeftParen)}
             ')' => {tokens.push(Token::RightParen)}
             '^' => {tokens.push(Token::StartAnchor)}
             '$' => {tokens.push(Token::EndAnchor)}
@@ -71,6 +59,8 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                     'D' => {tokens.push(Token::CharacterClass(CharClassType::NonDigit))}
                     's' => {tokens.push(Token::CharacterClass(CharClassType::Whitespace))}
                     'S' => {tokens.push(Token::CharacterClass(CharClassType::NonWhitespace))}
+                    'b' => {tokens.push(Token::WordBoundary)}
+                    'B' => {tokens.push(Token::NonWordBoundary)}
                     '0'..='9' => {
                         //Octal escapes do not have a flag, only 3 number digits
                         if i + 2 < len {
@@ -337,14 +327,6 @@ mod tests {
         let expected: Vec<Token> = vec![Token::Literal('*'), Token::Literal('?'), Token::Literal('+'),
                                         Token::Literal('('), Token::Literal(')'), Token::Literal('|'),
                                         Token::Literal('.'), Token::Literal('^'), Token::Literal('$')];
-        assert_eq!(tokens, expected);
-    }
-    #[test]
-    fn test_groups() {
-        let mut tokens = tokenize("(abc)(?:abc)").unwrap();
-        let mut expected: Vec<Token> = vec![Token::LeftParen(GroupType::Capturing, Some(1)), Token::Literal('a'), Token::Literal('b'),
-                                        Token::Literal('c'), Token::RightParen, Token::LeftParen(GroupType::NonCapturing, None),
-                                        Token::Literal('a'), Token::Literal('b'), Token::Literal('c'), Token::RightParen];
         assert_eq!(tokens, expected);
     }
     #[test]
