@@ -7,3 +7,6 @@
 </div>
 <br>
 
+
+<h2>Still in active development!</h2>
+<h2>Proper README coming SOON!</h2>
