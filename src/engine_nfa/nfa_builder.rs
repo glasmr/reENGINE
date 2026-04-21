@@ -271,13 +271,15 @@ impl BuilderNFA {
         let start_state_idx = nfa.0;
         self.deep_copy_dfs(start_state_idx, &mut mappings, nfa.1);
 
-        let copy_end_state_idx = self.nfa_vec.len() - 1;
+        let copy_end = self.nfa_vec.len();
 
-        for i in copy_start_state_idx .. copy_end_state_idx {
+
+        for i in copy_start_state_idx .. copy_end {
             match &mut self.nfa_vec[i] {
                 State::Single(transition) => {
                     if transition.next_state().is_none() {continue}
                     let current_next_state = transition.next_state().unwrap();
+                    if !mappings.contains_key(&current_next_state) {continue}
                     transition.update_next_state(mappings[&current_next_state]);
                 }
                 State::Split(transition_1, transition_2) => {
@@ -291,7 +293,7 @@ impl BuilderNFA {
             }
         }
 
-        Ok((copy_start_state_idx, copy_end_state_idx))
+        Ok((copy_start_state_idx, mappings[&nfa.1]))
     }
 
     fn deep_copy_dfs(&mut self, state_idx: usize, mappings: &mut HashMap<usize, usize>, last_state: usize) {
@@ -300,7 +302,10 @@ impl BuilderNFA {
         self.nfa_vec.push(self.nfa_vec[state_idx].clone());
         mappings.insert(state_idx, new_state_idx);
 
-        if last_state == state_idx {return}
+        if last_state == state_idx {
+            //self.nfa_vec[new_state_idx] = State::Single(Transition::DanglingTransition);
+            return
+        }
 
         match &self.nfa_vec[state_idx] {
             State::Single(transition) => {

@@ -22,7 +22,6 @@ impl Simulator {
 
 
     pub fn simulate(&mut self, input: String, search_type: SearchType) -> bool {
-        //dbg!(&self.nfa.states);
         self.input_str_vec = input.chars().collect();
         let start_state = self.nfa.start_state;
         let start_set: HashSet<usize> = self.epsilon_closure(&HashSet::from([start_state]));
@@ -43,7 +42,6 @@ impl Simulator {
                     }
                 }
             }
-            //dbg!(&state_set);
         }
         for state in &state_set {
             if let State::Match = self.nfa.states[*state] {
@@ -119,23 +117,28 @@ impl Simulator {
             EpsilonCondition::Unconditional => true,
             EpsilonCondition::StartAnchor => {self.str_pos == 0}
             EpsilonCondition::EndAnchor => {self.str_pos == self.input_str_vec.len() - 1}
-            EpsilonCondition::WordBoundary => {self.is_word_boundary(&self.str_pos, &self.input_str_vec)}
+            EpsilonCondition::WordBoundary => {
+                self.is_word_boundary(&self.str_pos, &self.input_str_vec)
+            }
             EpsilonCondition::NonWordBoundary => {!self.is_word_boundary(&self.str_pos, &self.input_str_vec)}
         }
     }
     fn is_word(&self, c: char) -> bool {
         c.is_ascii_alphabetic() || c == '_'
     }
+    fn is_digit(&self, c: char) -> bool {
+        c.is_ascii_digit()
+    }
     fn is_word_boundary(&self, str_pos: &usize, input: &Vec<char>) -> bool {
         let left = if *str_pos == 0 {
             false
         } else {
-            self.is_word(input[*str_pos - 1])
+            self.is_word(input[*str_pos - 1]) || self.is_digit(input[*str_pos - 1])
         };
         let right = if *str_pos >= input.len() - 1 {
             false
         } else {
-            self.is_word(input[*str_pos + 1])
+            self.is_word(input[*str_pos + 1]) || self.is_digit(input[*str_pos + 1])
         };
         left != right
     }

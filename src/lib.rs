@@ -457,4 +457,109 @@ mod tests {
         result = regex.search("baab",  SearchType::Substring).unwrap();
         assert_eq!(result, true);
     }
+
+    #[test]
+    fn combined_bounded_repetition() {
+        let mut regex = Regex::new();
+        regex.compile("^\\w{3,8}$").unwrap();
+
+        let mut result = regex.search("hello",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, true);
+        result = regex.search("hello",  SearchType::Substring).unwrap();
+        assert_eq!(result, true);
+
+        result = regex.search("hi",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, false);
+        result = regex.search("hi",  SearchType::Substring).unwrap();
+        assert_eq!(result, false);
+
+        result = regex.search("toolongword",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, false);
+        result = regex.search("toolongword",  SearchType::Substring).unwrap();
+        assert_eq!(result, false);
+
+        regex.compile("^\\d{4}-\\d{2}-\\d{2}$").unwrap();
+
+        result = regex.search("2024-01-15",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, true);
+        result = regex.search("2024-01-15",  SearchType::Substring).unwrap();
+        assert_eq!(result, true);
+
+        result = regex.search("2024-1-15",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, false);
+        result = regex.search("2024-1-15",  SearchType::Substring).unwrap();
+        assert_eq!(result, false);
+
+        result = regex.search("x2024-01-15y",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, false);
+        result = regex.search("x2024-01-15y",  SearchType::Substring).unwrap();
+        assert_eq!(result, false);
+
+        regex.compile("\\b\\d{3}-\\d{4}\\b").unwrap();
+
+        result = regex.search("call 555-1234 now",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, false);
+        result = regex.search("call 555-1234 now",  SearchType::Substring).unwrap();
+        assert_eq!(result, true);
+
+        result = regex.search("x555-1234x",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, false);
+        result = regex.search("x555-1234x",  SearchType::Substring).unwrap();
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn test_nested_repetition() {
+        let mut regex = Regex::new();
+        regex.compile("(a*)*").unwrap();
+
+        let mut result = regex.search("",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, true);
+        result = regex.search("",  SearchType::Substring).unwrap();
+        assert_eq!(result, true);
+
+        result = regex.search("aaa",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, true);
+        result = regex.search("aaa",  SearchType::Substring).unwrap();
+        assert_eq!(result, true);
+
+        result = regex.search("b",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, false);
+        result = regex.search("b",  SearchType::Substring).unwrap();
+        assert_eq!(result, true);
+
+        regex.compile("(a+)+").unwrap();
+
+        result = regex.search("",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, false);
+        result = regex.search("",  SearchType::Substring).unwrap();
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn deep_copy_tests() {
+        let mut regex = Regex::new();
+        regex.compile("(ab){3}").unwrap();
+
+        let mut result = regex.search("ababab",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, true);
+        result = regex.search("abab",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, false);
+        result = regex.search("abababab",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, false);
+
+        regex.compile("(ab){2, 4}").unwrap();
+        result = regex.search("abab",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, true);
+        result = regex.search("abababab",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, true);
+        result = regex.search("ab",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, false);
+        result = regex.search("ababababab",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, false);
+
+        regex.compile("(b|a){3}").unwrap();
+        result = regex.search("bbb",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, true);
+    }
 }
