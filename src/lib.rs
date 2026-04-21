@@ -561,5 +561,60 @@ mod tests {
         regex.compile("(b|a){3}").unwrap();
         result = regex.search("bbb",  SearchType::Fullstring).unwrap();
         assert_eq!(result, true);
+
+        regex.compile("(ab|cd){2,3}").unwrap();
+        result = regex.search("abcd",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, true);
+        result = regex.search("cdcdcd",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, true);
+        result = regex.search("abcdcd",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, true);
+        result = regex.search("ab",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn nested_bounded_test() {
+        let mut regex = Regex::new();
+        regex.compile("((ab){2}){3}").unwrap();
+        let mut result = regex.search("abababababab",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, true);
+        result = regex.search("ababab",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, false);
+        result = regex.search("abababababababab",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, false);
+
+        regex.compile("((a|b){2}){3}").unwrap();
+        result = regex.search("aabbba",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, true);
+        result = regex.search("aabbb",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, false);
+
+        regex.compile("(a{2,3}b){2}").unwrap();
+        result = regex.search("aabaaab",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, true);
+        result = regex.search("abaab", SearchType::Fullstring).unwrap();
+        assert_eq!(result, false);
+        result = regex.search("aaaabaaab",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn state_id_uniqueness_test() {
+        let mut regex = Regex::new();
+        regex.compile("(a){5}").unwrap();
+        let mut result = regex.search("aaaaa",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, true);
+        result = regex.search("aaaa",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, false);
+        result = regex.search("aaaaaa",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, false);
+
+        regex.compile("(ab){4}").unwrap();
+        result = regex.search("ababababab",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, false);
+        result = regex.search("abababab",  SearchType::Fullstring).unwrap();
+        assert_eq!(result, true);
+
     }
 }
