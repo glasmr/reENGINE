@@ -1,13 +1,13 @@
-use nfa::{engine_nfa, parse_ast, tokenizer};
-use nfa::engine_nfa::simulate::SearchType;
+use nfa::{parse_ast, tokenizer};
+use nfa::simulate::SearchType;
 use nfa::types::nfa_types::NFA;
 
-pub mod nfa;
+pub(crate) mod nfa;
 pub mod regex;
-pub mod smatch;
+pub mod capture;
 pub mod error;
 
-pub struct Regex {
+/*pub struct Regex {
     nfa: Option<NFA>
 }
 impl Regex {
@@ -16,24 +16,24 @@ impl Regex {
             nfa: None
         }
     }
-    
+
     pub fn compile(&mut self, input: &str) -> Result<(), String> {
         let tokens = tokenizer::tokenize(input)?;
         let mut parser = parse_ast::Parser::new(tokens);
         let ast = parser.parse_regex()?;
-        let mut nfa_builder = engine_nfa::nfa_builder::BuilderNFA::new();
+        let mut nfa_builder = nfa::nfa_builder::BuilderNFA::new();
         self.nfa = Some(nfa_builder.compile(&ast)?);
-        
+
         Ok(())
     }
-    
+
     pub fn search(&self, input: &str, search_type: SearchType) -> Result<bool, String> {
-        let mut regex_sim = engine_nfa::simulate::Simulator::new(self.nfa.clone().unwrap());
+        let mut regex_sim = nfa::simulate::Simulator::new(self.nfa.clone().unwrap());
         let sim_result = regex_sim.simulate(input.to_string(), search_type);
         if !sim_result {
             return Ok(false);
         }
-        
+
         let sim_result_unwrapped = sim_result;
         //println!("{:?}", sim_result_unwrapped);
         Ok(sim_result_unwrapped)
@@ -636,4 +636,4 @@ mod tests {
         result = regex.search(" 1.2.3",  SearchType::Substring).unwrap();
         assert_eq!(result, false);
     }
-}
+}*/
