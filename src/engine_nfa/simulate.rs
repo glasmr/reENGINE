@@ -26,7 +26,6 @@ impl Simulator {
         let start_state = self.nfa.start_state;
         let start_set: HashSet<usize> = self.epsilon_closure(&HashSet::from([start_state]));
         let mut state_set: HashSet<usize> = start_set.clone();
-        //dbg!(&state_set);
         while self.str_pos < self.input_str_vec.len() {
             let current_char: char = self.input_str_vec[self.str_pos];
             if state_set.is_empty() {return false}
