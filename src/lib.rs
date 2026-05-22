@@ -615,6 +615,25 @@ mod tests {
         assert_eq!(result, false);
         result = regex.search("abababab",  SearchType::Fullstring).unwrap();
         assert_eq!(result, true);
+    }
 
+    #[test]
+    fn real_world_tests_version_nums() {
+        let mut regex = Regex::new();
+        regex.compile("^\\d{1,3}(\\.\\d{1,3}){2}$").unwrap();
+
+        let mut result = regex.search("1.2.3",  SearchType::Substring).unwrap();
+        assert_eq!(result, true);
+
+        result = regex.search("123.456.789",  SearchType::Substring).unwrap();
+        assert_eq!(result, true);
+        result = regex.search("1.2.3.4",  SearchType::Substring).unwrap();
+        assert_eq!(result, false);
+        result = regex.search("1.2",  SearchType::Substring).unwrap();
+        assert_eq!(result, false);
+        result = regex.search("1.2234.5",  SearchType::Substring).unwrap();
+        assert_eq!(result, false);
+        result = regex.search(" 1.2.3",  SearchType::Substring).unwrap();
+        assert_eq!(result, false);
     }
 }
