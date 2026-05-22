@@ -18,7 +18,7 @@
 
 use std::collections::HashSet;
 use std::str::FromStr;
-use crate::types::token_types::{CharClassType, Token, CharSetType};
+use crate::nfa::types::token_types::{CharClassType, Token, CharSetType};
 
 
 pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {

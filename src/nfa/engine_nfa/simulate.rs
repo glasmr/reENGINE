@@ -1,7 +1,7 @@
 use std::cmp::PartialEq;
 use std::collections::HashSet;
-use crate::types::nfa_types::{EpsilonCondition, State, Transition, NFA};
-use crate::matcher::matcher;
+use crate::nfa::types::nfa_types::{EpsilonCondition, State, Transition, NFA};
+use crate::nfa::matcher::matcher;
 
 pub struct Simulator {
     nfa: NFA,

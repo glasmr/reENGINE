@@ -1,4 +1,4 @@
-use crate::types::token_types::{CharClassType, CharSetType};
+use crate::nfa::types::token_types::{CharClassType, CharSetType};
 
 #[derive(Debug, PartialEq)]
 #[derive(Clone)]

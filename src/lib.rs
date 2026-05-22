@@ -1,11 +1,11 @@
-use crate::engine_nfa::simulate::SearchType;
-use crate::types::nfa_types::NFA;
+use nfa::{engine_nfa, parse_ast, tokenizer};
+use nfa::engine_nfa::simulate::SearchType;
+use nfa::types::nfa_types::NFA;
 
-mod tokenizer;
-mod types;
-mod parse_ast;
-mod engine_nfa;
-pub mod matcher;
+pub mod nfa;
+pub mod regex;
+pub mod smatch;
+pub mod error;
 
 pub struct Regex {
     nfa: Option<NFA>

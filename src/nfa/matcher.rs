@@ -1,5 +1,5 @@
-use crate::types::nfa_types::CharToMatch;
-use crate::types::token_types::{CharClassType, CharSetType};
+use crate::nfa::types::nfa_types::CharToMatch;
+use crate::nfa::types::token_types::{CharClassType, CharSetType};
 
 pub fn matcher(c: char, m: &CharToMatch) -> bool {
     match m {

@@ -13,12 +13,12 @@ use std::collections::{HashMap};
 /// corresponding to the start and end indexes
 
 
-use crate::types::{
+use crate::nfa::types::{
     ast_types::NodeAST,
     nfa_types::*
 };
-use crate::types::ast_types::QuantifierType;
-use crate::types::nfa_types::EpsilonCondition;
+use crate::nfa::types::ast_types::QuantifierType;
+use crate::nfa::types::nfa_types::EpsilonCondition;
 
 pub struct BuilderNFA {
     nfa_vec: Vec<State>,

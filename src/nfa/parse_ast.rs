@@ -30,8 +30,8 @@ We will define a BNF grammar, with which the parser will follow
         <word-boundary> ::= '\b' | '\B'
 
  */
-use crate::types::token_types::{Token};
-use crate::types::ast_types::{NodeAST, QuantifierType};
+use crate::nfa::types::token_types::{Token};
+use crate::nfa::types::ast_types::{NodeAST, QuantifierType};
 
 use std::iter::Peekable;
 use std::vec::IntoIter;
@@ -205,9 +205,9 @@ impl Parser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tokenizer::tokenize;
-    use crate::types::ast_types::NodeAST;
-    use crate::types::token_types::{CharClassType, CharSetType};
+    use crate::nfa::tokenizer::tokenize;
+    use crate::nfa::types::ast_types::NodeAST;
+    use crate::nfa::types::token_types::{CharClassType, CharSetType};
 
     #[test]
     fn test_precedence() {
