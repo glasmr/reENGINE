@@ -8,8 +8,6 @@ pub struct Simulator {
     input_str_vec: Vec<char>,
     str_pos: usize
 }
-#[derive(Debug, PartialEq)]
-pub enum SearchType {Substring, Fullstring}
 
 impl Simulator {
     pub fn new(nfa: NFA) -> Self {
@@ -21,7 +19,7 @@ impl Simulator {
     }
 
 
-    pub fn simulate(&mut self, input: String, search_type: SearchType) -> bool {
+    /*pub fn simulate(&mut self, input: String, search_type: SearchType) -> bool {
         self.input_str_vec = input.chars().collect();
         let start_state = self.nfa.start_state;
         let start_set: HashSet<usize> = self.epsilon_closure(&HashSet::from([start_state]));
@@ -48,16 +46,60 @@ impl Simulator {
             }
         }
         false
+    }*/
+
+    //TAKES: Input String, findall bool option
+    //RETURNS: Vec of matches (start_idx, end_idx)
+    pub fn simulate_nonoverlap(&mut self, input: String, findall: bool) -> Vec<(usize, usize)> {
+        let mut matches: Vec<(usize, usize)> = Vec::new();
+        let mut n_matches: usize = 0;
+        self.input_str_vec = input.chars().collect();
+
+        let start_state = (self.nfa.start_state, self.str_pos);
+        let mut state_set: HashSet<(usize, usize)> = HashSet::new();
+        state_set.insert(start_state);
+
+        while self.str_pos < self.input_str_vec.len() {
+            let current_char: char = self.input_str_vec[self.str_pos];
+            let mut contains_start: bool = false;
+            for (state, idx) in &state_set {
+                if *state == start_state.0 {
+                    contains_start = true;
+                    break;
+                }
+            }
+            if !contains_start {state_set.insert((start_state.0, self.str_pos));}
+            state_set = self.epsilon_closure(&state_set);
+            state_set = self.move_next_state(&state_set, current_char);
+            for state in &state_set {
+                if let State::Match = self.nfa.states[(*state).0] {
+                    matches.push(((*state).0, self.str_pos));
+                }
+                if n_matches == 0 && !findall {
+                    return matches;
+                }
+                n_matches += 1;
+            }
+        }
+
+        matches
     }
-    fn move_next_state(&mut self, state_set: &HashSet<usize>, c: char) -> HashSet<usize> {
-        let mut next_state_set: HashSet<usize> = HashSet::new();
+
+    pub fn simulate_overlapping(&mut self, input: Vec<(usize, usize)>) -> Vec<(usize, usize)> {
+        unimplemented!();
+    }
+
+    //TAKES: state set hashmap (state idx, str pos idx), char to match
+    //RETURNS; State set hashmap (state idx, str pos idx)
+    fn move_next_state(&mut self, state_set: &HashSet<(usize, usize)>, c: char) -> HashSet<(usize, usize)> {
+        let mut next_state_set: HashSet<(usize, usize)> = HashSet::new();
 
         for state in state_set {
-            match self.nfa.states[*state].clone() {
+            match self.nfa.states[(*state).0].clone() {
                 State::Single(transition) => {
                     if let Transition::Literal(next, to_match) = transition {
                         if matcher(c, &to_match) {
-                            next_state_set.insert(next);
+                            next_state_set.insert((next, (*state).1));
                         }
                     }
                 }
@@ -67,19 +109,24 @@ impl Simulator {
         //dbg!(&next_state_set);
         next_state_set
     }
-    fn epsilon_closure(&mut self, states: &HashSet<usize>) -> HashSet<usize> {
-        let mut stack: Vec<usize> = Vec::from(states.clone().into_iter().collect::<Vec<usize>>());
-        let mut visited: HashSet<usize> = HashSet::from(states.clone());
-        let mut next_state_set: HashSet<usize> = HashSet::from(states.clone());
+
+    //TAKES: state set hashmap (state idx, str pos idx)
+    //RETURNS; State set hashmap (state idx, str pos idx)
+    fn epsilon_closure(&mut self, states: &HashSet<(usize, usize)>) -> HashSet<(usize, usize)> {
+        //let mut stack: Vec<usize> = Vec::from(states.clone().into_iter().collect::<Vec<usize>>());
+        let mut stack: Vec<(usize, usize)> = Vec::from(states.clone().into_iter().collect::<Vec<(usize, usize)>>());
+        
+        let mut visited: HashSet<usize> = HashSet::from(states.clone().into_iter().map(|(x, _)| x).collect::<HashSet<_>>());
+        let mut next_state_set: HashSet<(usize, usize)> = HashSet::from(states.clone());
 
         while !stack.is_empty() {
             let current_state = stack.pop().unwrap();
-            match self.nfa.states[current_state].clone() {
+            match self.nfa.states[current_state.0].clone() {
                 State::Single(Transition::Epsilon(next, condition)) => {
                     if !visited.contains(&next){
                         if self.epsilon_condition(&condition) {
-                            stack.push(next);
-                            next_state_set.insert(next);
+                            stack.push((next, current_state.1));
+                            next_state_set.insert((next, current_state.1));
                             visited.insert(next);
                         }
                     }
@@ -88,8 +135,8 @@ impl Simulator {
                     if let Transition::Epsilon(next, condition) = transition_1 {
                         if !visited.contains(&next){
                             if self.epsilon_condition(&condition) {
-                                stack.push(next);
-                                next_state_set.insert(next);
+                                stack.push((next, current_state.1));
+                                next_state_set.insert((next, current_state.1));
                                 visited.insert(next);
                             }
                         }
@@ -97,14 +144,14 @@ impl Simulator {
                     if let Transition::Epsilon(next, condition) = transition_2 {
                         if !visited.contains(&next){
                             if self.epsilon_condition(&condition) {
-                                stack.push(next);
-                                next_state_set.insert(next);
+                                stack.push((next, current_state.1));
+                                next_state_set.insert((next, current_state.1));
                                 visited.insert(next);
                             }
                         }
                     }
                 }
-                State::Match => {next_state_set.insert(current_state);}
+                State::Match => {next_state_set.insert((current_state.0, current_state.1));}
                 _ => {}
             }
         }

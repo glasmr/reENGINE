@@ -1,5 +1,4 @@
 use nfa::{parse_ast, tokenizer};
-use nfa::simulate::SearchType;
 use nfa::types::nfa_types::NFA;
 
 pub(crate) mod nfa;
