@@ -1,7 +1,11 @@
 use std::cmp::PartialEq;
 use std::collections::HashSet;
+use crate::error::RegexError;
 use crate::nfa::types::nfa_types::{EpsilonCondition, State, Transition, NFA};
 use crate::nfa::matcher::matcher;
+use crate::nfa::nfa_builder::BuilderNFA;
+use crate::nfa::parse_ast::Parser;
+use crate::nfa::tokenizer::tokenize;
 
 pub struct Simulator {
     nfa: NFA,
@@ -10,12 +14,23 @@ pub struct Simulator {
 }
 
 impl Simulator {
-    pub fn new(nfa: NFA) -> Self {
+    pub fn _new(nfa: NFA) -> Self {
         Simulator{
             nfa,
             input_str_vec: Vec::new(),
             str_pos: 0
         }
+    }
+
+    pub fn new(pattern: &str) -> Result<Self, RegexError> {
+        let tokens = tokenize(pattern).unwrap();
+        let ast = Parser::new(tokens).parse_regex().unwrap();
+        let nfa = BuilderNFA::new().compile(&ast).unwrap();
+        Ok(Simulator{
+            nfa,
+            input_str_vec: Vec::new(),
+            str_pos: 0
+        })
     }
 
 
